@@ -68,6 +68,8 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
   const [loading, setLoading] = useState(true);
   const [devicesLoading, setDevicesLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+  const [activeSeqIndex, setActiveSeqIndex] = useState<Record<string, number | null>>({});
+  const [seqStatusMsg, setSeqStatusMsg] = useState<Record<string, string>>({});
 
   // 1. Fetch building details & rooms
   const loadBuildingData = async () => {
@@ -302,7 +304,27 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
         
         // Skip if already in the target state
         const currentState = !!deviceItem[`state${switchIdx}`];
-        if (currentState === targetState) continue;
+        if (currentState === targetState) {
+          // Still show brief visual feedback that this is skipped/finished
+          setActiveSeqIndex(prev => ({ ...prev, [deviceItem.id]: switchIdx }));
+          setSeqStatusMsg(prev => ({ ...prev, [deviceItem.id]: `Lewati Saklar ${switchIdx} (Sudah Sesuai State)` }));
+          await delay(300);
+          continue;
+        }
+
+        // 1. Set Active Visual Index and Status Message
+        setActiveSeqIndex(prev => ({ ...prev, [deviceItem.id]: switchIdx }));
+        
+        let switchName = `Tombol ${switchIdx}`;
+        if (switchIdx === 1) switchName = deviceItem.gang1Name || 'Tombol 1';
+        else if (switchIdx === 2) switchName = deviceItem.gang2Name || 'Tombol 2';
+        else if (switchIdx === 3) switchName = deviceItem.gang3Name || 'Tombol 3';
+        else if (switchIdx === 4) switchName = deviceItem.gang4Name || 'Tombol 4';
+        
+        setSeqStatusMsg(prev => ({ 
+          ...prev, 
+          [deviceItem.id]: `Menghubungkan ${switchName} -> ${targetState ? 'ON' : 'OFF'}...` 
+        }));
 
         // Perform control request
         const res = await fetch('/api/tuya', {
@@ -324,19 +346,35 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
               }
               return d;
             }));
-            await addAuditLog(`[SEKUENSIAL] ${deviceItem.name} (TOMBOL ${switchIdx}) -> ${targetState ? 'ON' : 'OFF'}`);
+            await addAuditLog(`[SEKUENSIAL] ${deviceItem.name} (${switchName}) -> ${targetState ? 'ON' : 'OFF'}`);
           }
         }
 
         // Apply delay if this is not the last item
         if (i < switchIndexes.length - 1) {
+          setSeqStatusMsg(prev => ({ 
+            ...prev, 
+            [deviceItem.id]: `Jeda... Menunggu ${deviceItem.sequentialDelay} detik...` 
+          }));
           await delay(seqDelay);
         }
       }
+      
+      setSeqStatusMsg(prev => ({ ...prev, [deviceItem.id]: '✅ Berurutan Selesai!' }));
+      setTimeout(() => {
+        setSeqStatusMsg(prev => {
+          const next = { ...prev };
+          delete next[deviceItem.id];
+          return next;
+        });
+      }, 2500);
+
     } catch (err) {
       console.error('Sequential execution failed', err);
+      setSeqStatusMsg(prev => ({ ...prev, [deviceItem.id]: '❌ Gagal mengeksekusi!' }));
     } finally {
       setActionLoading(prev => ({ ...prev, [actionKey]: false }));
+      setActiveSeqIndex(prev => ({ ...prev, [deviceItem.id]: null }));
     }
   };
 
@@ -565,6 +603,15 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
                                         </div>
                                       )}
                                       
+                                      {/* Sequential Live Status Ticker */}
+                                      {seqStatusMsg[deviceItem.id] && (
+                                        <div className="bg-indigo-50/60 border border-indigo-100/50 rounded-lg p-2 text-center animate-pulse">
+                                          <span className="text-[8px] font-black uppercase tracking-wider text-indigo-600 block">
+                                            {seqStatusMsg[deviceItem.id]}
+                                          </span>
+                                        </div>
+                                      )}
+
                                       <div className={`grid gap-2 ${
                                         count === 1 ? 'grid-cols-1' : count === 2 ? 'grid-cols-2' : count === 3 ? 'grid-cols-3' : 'grid-cols-4'
                                       }`}>
@@ -572,6 +619,7 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
                                           const stateKey = `state${num}` as keyof Device;
                                           const isStateOn = !!deviceItem[stateKey];
                                           const actionKey = `${deviceItem.id}-${num}`;
+                                          const isActivelySeqProcessed = activeSeqIndex[deviceItem.id] === num;
                                           
                                           let btnName = 'Tombol';
                                           if (num === 1) btnName = deviceItem.gang1Name || 'Tombol 1';
@@ -585,12 +633,20 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
                                               onClick={() => handleToggleSwitch(deviceItem, num, !isStateOn)}
                                               disabled={actionLoading[actionKey] || !!actionLoading[`${deviceItem.id}-seq`]}
                                               className={`py-2 px-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 flex flex-col items-center gap-1.5 border ${
-                                                isStateOn
-                                                  ? 'bg-cyan-50 text-cyan-600 border-cyan-200 shadow-sm'
-                                                  : 'bg-white hover:bg-slate-50 text-slate-400 border-slate-200'
+                                                isActivelySeqProcessed
+                                                  ? 'bg-indigo-50 border-indigo-400 ring-2 ring-indigo-400/40 animate-pulse scale-[1.03] text-indigo-650'
+                                                  : isStateOn
+                                                    ? 'bg-cyan-50 text-cyan-600 border-cyan-200 shadow-sm'
+                                                    : 'bg-white hover:bg-slate-50 text-slate-400 border-slate-200'
                                               }`}
                                             >
-                                              <span className={`w-1.5 h-1.5 rounded-full ${isStateOn ? 'bg-cyan-500' : 'bg-slate-300'}`}></span>
+                                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                                isActivelySeqProcessed
+                                                  ? 'bg-indigo-500 animate-ping'
+                                                  : isStateOn 
+                                                    ? 'bg-cyan-500' 
+                                                    : 'bg-slate-300'
+                                              }`}></span>
                                               <span className="truncate w-full text-center">
                                                 {btnName}
                                               </span>
