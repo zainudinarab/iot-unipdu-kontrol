@@ -570,7 +570,17 @@ function AdminPageContent() {
         })
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      let data: any = {};
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const rawText = await res.text();
+        console.error('Non-JSON response received:', rawText);
+        showToast(`Gagal: Server Error (${res.status}) - Coba lagi beberapa saat.`, 'error');
+        return;
+      }
+
       if (res.ok && data.success && data.uid) {
         // 2. Write user profile to Firestore from client-side
         await setDoc(doc(db, 'users', data.uid), {
@@ -629,9 +639,20 @@ function AdminPageContent() {
         try {
           // 1. Delete user from Firebase Auth via server API
           const res = await fetch(`/api/users?uid=${userUid}`, { method: 'DELETE' });
-          const data = await res.json();
-          
-          if (res.ok && data.success) {
+           
+           const contentType = res.headers.get('content-type') || '';
+           let data: any = {};
+           if (contentType.includes('application/json')) {
+             data = await res.json();
+           } else {
+             const rawText = await res.text();
+             console.error('Non-JSON response received:', rawText);
+             closeConfirmModal();
+             showToast(`Gagal: Server Error (${res.status}) - Coba lagi beberapa saat.`, 'error');
+             return;
+           }
+           
+           if (res.ok && data.success) {
             // 2. Delete user profile document from Firestore using client SDK
             await deleteDoc(doc(db, 'users', userUid));
             
