@@ -299,17 +299,24 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
       const activeRoom = rooms.find(r => r.id === deviceItem.roomId);
       await addAuditLog(`MEMULAI AKSI SEKUENSIAL ${targetState ? 'ON' : 'OFF'} UNTUK ${deviceItem.name} di ${activeRoom?.name || 'Ruangan'}`);
 
+      let commandsExecuted = 0;
+
       for (let i = 0; i < switchIndexes.length; i++) {
         const switchIdx = switchIndexes[i];
         
-        // Skip if already in the target state
+        // Skip instantly if already in the target state
         const currentState = !!deviceItem[`state${switchIdx}`];
         if (currentState === targetState) {
-          // Still show brief visual feedback that this is skipped/finished
-          setActiveSeqIndex(prev => ({ ...prev, [deviceItem.id]: switchIdx }));
-          setSeqStatusMsg(prev => ({ ...prev, [deviceItem.id]: `Lewati Saklar ${switchIdx} (Sudah Sesuai State)` }));
-          await delay(300);
           continue;
+        }
+
+        // Apply delay BEFORE executing if we have already run at least one command
+        if (commandsExecuted > 0) {
+          setSeqStatusMsg(prev => ({ 
+            ...prev, 
+            [deviceItem.id]: `Jeda... Menunggu ${deviceItem.sequentialDelay} detik...` 
+          }));
+          await delay(seqDelay);
         }
 
         // 1. Set Active Visual Index and Status Message
@@ -347,16 +354,8 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
               return d;
             }));
             await addAuditLog(`[SEKUENSIAL] ${deviceItem.name} (${switchName}) -> ${targetState ? 'ON' : 'OFF'}`);
+            commandsExecuted++;
           }
-        }
-
-        // Apply delay if this is not the last item
-        if (i < switchIndexes.length - 1) {
-          setSeqStatusMsg(prev => ({ 
-            ...prev, 
-            [deviceItem.id]: `Jeda... Menunggu ${deviceItem.sequentialDelay} detik...` 
-          }));
-          await delay(seqDelay);
         }
       }
       
@@ -632,21 +631,24 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
                                               key={num}
                                               onClick={() => handleToggleSwitch(deviceItem, num, !isStateOn)}
                                               disabled={actionLoading[actionKey] || !!actionLoading[`${deviceItem.id}-seq`]}
-                                              className={`py-2 px-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 flex flex-col items-center gap-1.5 border ${
+                                              className={`py-2.5 px-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 flex flex-col items-center gap-1 border ${
                                                 isActivelySeqProcessed
                                                   ? 'bg-indigo-50 border-indigo-400 ring-2 ring-indigo-400/40 animate-pulse scale-[1.03] text-indigo-650'
                                                   : isStateOn
-                                                    ? 'bg-cyan-50 text-cyan-600 border-cyan-200 shadow-sm'
+                                                    ? 'bg-amber-50 text-amber-600 border-amber-200 shadow-sm'
                                                     : 'bg-white hover:bg-slate-50 text-slate-400 border-slate-200'
                                               }`}
                                             >
-                                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                              <span className={`text-base transition-all duration-300 ${
                                                 isActivelySeqProcessed
-                                                  ? 'bg-indigo-500 animate-ping'
-                                                  : isStateOn 
-                                                    ? 'bg-cyan-500' 
-                                                    : 'bg-slate-300'
-                                              }`}></span>
+                                                  ? 'animate-bounce text-indigo-500'
+                                                  : isStateOn
+                                                    ? 'text-amber-500 drop-shadow-[0_2px_8px_rgba(245,158,11,0.4)] scale-110'
+                                                    : 'text-slate-300 grayscale opacity-60'
+                                              }`}>
+                                                💡
+                                              </span>
+                                              
                                               <span className="truncate w-full text-center">
                                                 {btnName}
                                               </span>
