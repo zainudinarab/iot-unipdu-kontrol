@@ -185,6 +185,10 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
           acCount: dData.acCount || 1,
           tvCount: dData.tvCount || 1,
           projectorCount: dData.projectorCount || 1,
+          isSequential: !!dData.isSequential,
+          sequentialDelay: dData.sequentialDelay || 2,
+          onOrder: dData.onOrder || 'forward',
+          offOrder: dData.offOrder || 'forward',
         });
       }
       setDevices(deviceList);
@@ -263,6 +267,74 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setActionLoading(prev => ({ ...prev, [actionKey]: false }));
+    }
+  };
+
+  // Helper Delay
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // Sequential Switch ON/OFF Toggle
+  const handleSequentialToggle = async (deviceItem: Device, targetState: boolean) => {
+    const gangCount = deviceItem.gangCount || 3;
+    const seqDelay = (deviceItem.sequentialDelay || 2) * 1000;
+    const order = targetState 
+      ? (deviceItem.onOrder || 'forward') 
+      : (deviceItem.offOrder || 'forward');
+
+    // Create array of switch indexes [1..gangCount]
+    let switchIndexes = Array.from({ length: gangCount }, (_, i) => i + 1);
+    if (order === 'reverse') {
+      switchIndexes.reverse();
+    }
+
+    const actionKey = `${deviceItem.id}-seq`;
+    if (actionLoading[actionKey]) return;
+    setActionLoading(prev => ({ ...prev, [actionKey]: true }));
+
+    try {
+      const activeRoom = rooms.find(r => r.id === deviceItem.roomId);
+      await addAuditLog(`MEMULAI AKSI SEKUENSIAL ${targetState ? 'ON' : 'OFF'} UNTUK ${deviceItem.name} di ${activeRoom?.name || 'Ruangan'}`);
+
+      for (let i = 0; i < switchIndexes.length; i++) {
+        const switchIdx = switchIndexes[i];
+        
+        // Skip if already in the target state
+        const currentState = !!deviceItem[`state${switchIdx}`];
+        if (currentState === targetState) continue;
+
+        // Perform control request
+        const res = await fetch('/api/tuya', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            deviceId: deviceItem.tuyaDeviceId, 
+            switchIndex: switchIdx, 
+            state: targetState 
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            setDevices(prev => prev.map(d => {
+              if (d.id === deviceItem.id) {
+                return { ...d, [`state${switchIdx}`]: targetState };
+              }
+              return d;
+            }));
+            await addAuditLog(`[SEKUENSIAL] ${deviceItem.name} (TOMBOL ${switchIdx}) -> ${targetState ? 'ON' : 'OFF'}`);
+          }
+        }
+
+        // Apply delay if this is not the last item
+        if (i < switchIndexes.length - 1) {
+          await delay(seqDelay);
+        }
+      }
+    } catch (err) {
+      console.error('Sequential execution failed', err);
     } finally {
       setActionLoading(prev => ({ ...prev, [actionKey]: false }));
     }
@@ -456,8 +528,42 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
                                     <div key={deviceItem.id} className="p-4 bg-slate-55 border border-slate-100 rounded-xl space-y-3">
                                       <div className="flex justify-between text-[9px] text-slate-455 font-black uppercase tracking-wider">
                                         <span>{deviceItem.name}</span>
-                                        <span className="text-cyan-600 font-bold">{count}-Gang Switch</span>
+                                        <span className="text-cyan-600 font-bold">
+                                          {deviceItem.isSequential ? 'Sequential Switch' : `${count}-Gang Switch`}
+                                        </span>
                                       </div>
+
+                                      {/* Sequential Actions Panel */}
+                                      {deviceItem.isSequential && (
+                                        <div className="p-2.5 bg-white border border-slate-200/80 rounded-lg space-y-2">
+                                          <div className="flex justify-between items-center text-[8px] text-slate-400 font-black uppercase tracking-wider">
+                                            <span>Urutan: {deviceItem.onOrder === 'forward' ? '1➔4' : '4➔1'}</span>
+                                            <span>Jeda: {deviceItem.sequentialDelay} Detik</span>
+                                          </div>
+                                          
+                                          <div className="flex gap-2">
+                                            <button
+                                              onClick={() => handleSequentialToggle(deviceItem, true)}
+                                              disabled={!!actionLoading[`${deviceItem.id}-seq`]}
+                                              className="flex-1 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 rounded-md text-[8px] font-black uppercase tracking-wider transition-all disabled:opacity-50 flex items-center justify-center gap-1"
+                                            >
+                                              {actionLoading[`${deviceItem.id}-seq`] ? (
+                                                <span className="loading loading-spinner w-2.5 h-2.5"></span>
+                                              ) : '🟢 Nyala Berurutan'}
+                                            </button>
+
+                                            <button
+                                              onClick={() => handleSequentialToggle(deviceItem, false)}
+                                              disabled={!!actionLoading[`${deviceItem.id}-seq`]}
+                                              className="flex-1 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-md text-[8px] font-black uppercase tracking-wider transition-all disabled:opacity-50 flex items-center justify-center gap-1"
+                                            >
+                                              {actionLoading[`${deviceItem.id}-seq`] ? (
+                                                <span className="loading loading-spinner w-2.5 h-2.5"></span>
+                                              ) : '🔴 Mati Berurutan'}
+                                            </button>
+                                          </div>
+                                        </div>
+                                      )}
                                       
                                       <div className={`grid gap-2 ${
                                         count === 1 ? 'grid-cols-1' : count === 2 ? 'grid-cols-2' : count === 3 ? 'grid-cols-3' : 'grid-cols-4'
@@ -477,7 +583,7 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
                                             <button
                                               key={num}
                                               onClick={() => handleToggleSwitch(deviceItem, num, !isStateOn)}
-                                              disabled={actionLoading[actionKey]}
+                                              disabled={actionLoading[actionKey] || !!actionLoading[`${deviceItem.id}-seq`]}
                                               className={`py-2 px-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 flex flex-col items-center gap-1.5 border ${
                                                 isStateOn
                                                   ? 'bg-cyan-50 text-cyan-600 border-cyan-200 shadow-sm'

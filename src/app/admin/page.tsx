@@ -44,6 +44,10 @@ interface Device {
   acCount?: number;
   tvCount?: number;
   projectorCount?: number;
+  isSequential?: boolean;
+  sequentialDelay?: number;
+  onOrder?: 'forward' | 'reverse';
+  offOrder?: 'forward' | 'reverse';
 }
 
 interface UserProfile {
@@ -137,6 +141,10 @@ function AdminPageContent() {
   const [newAcCount, setNewAcCount] = useState<number>(1);
   const [newTvCount, setNewTvCount] = useState<number>(1);
   const [newProjectorCount, setNewProjectorCount] = useState<number>(1);
+  const [newIsSequential, setNewIsSequential] = useState<boolean>(false);
+  const [newSequentialDelay, setNewSequentialDelay] = useState<number>(2);
+  const [newOnOrder, setNewOnOrder] = useState<'forward' | 'reverse'>('forward');
+  const [newOffOrder, setNewOffOrder] = useState<'forward' | 'reverse'>('forward');
 
   // Users State
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -286,6 +294,10 @@ function AdminPageContent() {
           acCount: data.acCount || 1,
           tvCount: data.tvCount || 1,
           projectorCount: data.projectorCount || 1,
+          isSequential: !!data.isSequential,
+          sequentialDelay: data.sequentialDelay || 2,
+          onOrder: data.onOrder || 'forward',
+          offOrder: data.offOrder || 'forward',
         });
       });
       setDevices(deviceList);
@@ -440,6 +452,12 @@ function AdminPageContent() {
         if (newGangCount >= 2) deviceData.gang2Name = newGang2Name || 'Tombol 2';
         if (newGangCount >= 3) deviceData.gang3Name = newGang3Name || 'Tombol 3';
         if (newGangCount >= 4) deviceData.gang4Name = newGang4Name || 'Tombol 4';
+        
+        // Save sequential options
+        deviceData.isSequential = newIsSequential;
+        deviceData.sequentialDelay = newSequentialDelay;
+        deviceData.onOrder = newOnOrder;
+        deviceData.offOrder = newOffOrder;
       } else {
         deviceData.irDevices = newIrDevices;
         if (newIrDevices.includes('ac')) deviceData.acCount = newAcCount;
@@ -466,6 +484,10 @@ function AdminPageContent() {
       setNewIrDevices([]);
       setNewAcCount(1);
       setNewTvCount(1);
+      setNewIsSequential(false);
+      setNewSequentialDelay(2);
+      setNewOnOrder('forward');
+      setNewOffOrder('forward');
       setNewProjectorCount(1);
       
       await loadAdminData();
@@ -491,6 +513,10 @@ function AdminPageContent() {
     setNewAcCount(device.acCount || 1);
     setNewTvCount(device.tvCount || 1);
     setNewProjectorCount(device.projectorCount || 1);
+    setNewIsSequential(!!device.isSequential);
+    setNewSequentialDelay(device.sequentialDelay || 2);
+    setNewOnOrder(device.onOrder || 'forward');
+    setNewOffOrder(device.offOrder || 'forward');
   };
 
   // Delete Device Handler
@@ -1005,6 +1031,66 @@ function AdminPageContent() {
                             </div>
                           )}
                         </div>
+                      </div>
+
+                      {/* Sequential Switch Mode Options */}
+                      <div className="pt-3 border-t border-slate-100 space-y-3">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="isSequential"
+                            checked={newIsSequential}
+                            onChange={(e) => setNewIsSequential(e.target.checked)}
+                            className="rounded text-indigo-650 focus:ring-indigo-500 border-slate-300 w-3.5 h-3.5"
+                          />
+                          <label htmlFor="isSequential" className="text-[10px] font-bold text-slate-600 uppercase tracking-wide cursor-pointer select-none">
+                            Aktifkan Mode Sekuensial (Delay)
+                          </label>
+                        </div>
+
+                        {newIsSequential && (
+                          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                            <div>
+                              <label className="text-[8px] text-slate-500 font-black uppercase tracking-wider block mb-1">Jeda Waktu Antar Saklar</label>
+                              <select
+                                value={newSequentialDelay}
+                                onChange={(e) => setNewSequentialDelay(Number(e.target.value))}
+                                className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] text-slate-800"
+                              >
+                                <option value={1}>1 Detik</option>
+                                <option value={2}>2 Detik</option>
+                                <option value={3}>3 Detik</option>
+                                <option value={5}>5 Detik</option>
+                              </select>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="text-[8px] text-slate-500 font-black uppercase tracking-wider block mb-1">Arah Nyala (ON)</label>
+                                <select
+                                  value={newOnOrder}
+                                  onChange={(e) => setNewOnOrder(e.target.value as any)}
+                                  className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] text-slate-800 font-semibold"
+                                >
+                                  <option value="forward">Maju (1 ➔ 4)</option>
+                                  <option value="reverse">Mundur (4 ➔ 1)</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="text-[8px] text-slate-500 font-black uppercase tracking-wider block mb-1">Arah Mati (OFF)</label>
+                                <select
+                                  value={newOffOrder}
+                                  onChange={(e) => setNewOffOrder(e.target.value as any)}
+                                  className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] text-slate-800 font-semibold"
+                                >
+                                  <option value="forward">Maju (1 ➔ 4)</option>
+                                  <option value="reverse">Mundur (4 ➔ 1)</option>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
