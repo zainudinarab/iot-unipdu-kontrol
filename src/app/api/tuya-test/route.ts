@@ -10,12 +10,22 @@ export async function GET() {
   let tuyaTime = 0;
   let timeFetchError = '';
 
+  let tuyaTimeRawResponse = '';
+  let tuyaTimeStatusCode = 0;
+
   try {
     const timeRes = await fetch(`${endpoint}/v1.0/time`, { cache: 'no-store' });
+    tuyaTimeStatusCode = timeRes.status;
+    tuyaTimeRawResponse = await timeRes.text();
+    
     if (timeRes.ok) {
-      const data = await timeRes.json();
-      if (data.success) {
-        tuyaTime = data.result;
+      try {
+        const data = JSON.parse(tuyaTimeRawResponse);
+        if (data.success) {
+          tuyaTime = data.result;
+        }
+      } catch (parseErr: any) {
+        timeFetchError = 'JSON parse error: ' + parseErr.message;
       }
     }
   } catch (e: any) {
@@ -84,6 +94,8 @@ export async function GET() {
       vercelServerTime: vercelTime,
       tuyaServerTime: tuyaTime,
       diffMilliseconds: timeDiff,
+      tuyaTimeStatusCode,
+      tuyaTimeRawResponse,
       timeFetchError,
       hasTuyaKeys: {
         clientId: !!clientId,
