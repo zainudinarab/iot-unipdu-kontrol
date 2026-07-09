@@ -47,9 +47,25 @@ export class TuyaClient {
     return this.encryptHMAC(stringToSign, this.clientSecret);
   }
 
+  // Fetch official server time from Tuya to prevent sign invalid due to server drift
+  async getTuyaTime(): Promise<string> {
+    try {
+      const res = await fetch(`${this.endpoint}/v1.0/time`, { method: 'GET' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.result) {
+          return data.result.toString();
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch Tuya server time, falling back to local time:', err);
+    }
+    return Date.now().toString();
+  }
+
   // Fetch access token from Tuya
   async getAccessToken(): Promise<string> {
-    const timestamp = Date.now().toString();
+    const timestamp = await this.getTuyaTime();
     const path = '/v1.0/token?grant_type=1';
     const signature = this.getSignature('GET', path, '', timestamp);
 
@@ -94,7 +110,7 @@ export class TuyaClient {
 
     try {
       const accessToken = await this.getAccessToken();
-      const timestamp = Date.now().toString();
+      const timestamp = await this.getTuyaTime();
       const path = `/v1.0/devices/${activeDeviceId}`;
       const signature = this.getSignature('GET', path, accessToken, timestamp);
 
@@ -157,7 +173,7 @@ export class TuyaClient {
 
     try {
       const accessToken = await this.getAccessToken();
-      const timestamp = Date.now().toString();
+      const timestamp = await this.getTuyaTime();
       const path = `/v1.0/devices/${activeDeviceId}/commands`;
       
       const body = {
