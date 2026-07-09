@@ -17,10 +17,10 @@ export class TuyaClient {
   private deviceId: string;
 
   constructor() {
-    this.clientId = process.env.TUYA_CLIENT_ID || '';
-    this.clientSecret = process.env.TUYA_CLIENT_SECRET || '';
-    this.endpoint = process.env.TUYA_ENDPOINT || 'https://openapi-sg.iotbing.com';
-    this.deviceId = process.env.TUYA_DEVICE_ID || '';
+    this.clientId = (process.env.TUYA_CLIENT_ID || '').trim();
+    this.clientSecret = (process.env.TUYA_CLIENT_SECRET || '').trim();
+    this.endpoint = (process.env.TUYA_ENDPOINT || 'https://openapi-sg.iotbing.com').trim();
+    this.deviceId = (process.env.TUYA_DEVICE_ID || '').trim();
   }
 
   private encryptHMAC(data: string, secret: string): string {
