@@ -13,6 +13,12 @@ if (getApps().length === 0) {
         credential: cert(serviceAccount)
       });
       console.log('Firebase Admin SDK initialized successfully with JSON key (Modular).');
+    } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      initializeApp({
+        credential: cert(serviceAccount)
+      });
+      console.log('Firebase Admin SDK initialized successfully via FIREBASE_SERVICE_ACCOUNT env var.');
     } else {
       initializeApp();
       console.log('Firebase Admin SDK initialized with Application Default Credentials (Modular).');
