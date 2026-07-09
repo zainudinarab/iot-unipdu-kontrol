@@ -135,7 +135,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center font-sans text-slate-800">
-        <span className="loading loading-spinner text-indigo-600"></span>
+        <span className="loading loading-spinner text-teal-600"></span>
         <p className="text-slate-400 text-xs mt-2 tracking-widest uppercase font-semibold">Memuat Sistem...</p>
       </div>
     );
@@ -157,11 +157,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Logo Branding */}
           <div className="flex items-center justify-between pb-4 border-b border-slate-100">
             <Link href="/" className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-lg text-white shadow-md shadow-indigo-150">
-                UP
-              </div>
+              <img 
+                src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEijYML7M-8ZBOzjzSOC_3hFgkL64tSBOPrT_BQbDxABrQn4KyFkUJiU4aQw_vU9tKd1BETGxbNvbQBBgwDI4Ois0kMIwII2FJasmxvrRuDvgyAZwUGZ-RMp9BJTQ-OncoR0Sl4CfxBgmOJqDYtSJKntzi6_cNS8Z4IAwPeNOoo1GX2qu1bR3pfwti3Q/s320/GKL16_Universitas%20Pesantren%20Darululum%20UNIPDU%20Jombang%20-%20Koleksilogo.com.jpg" 
+                alt="Logo UNIPDU" 
+                className="w-10 h-10 object-contain rounded-lg"
+              />
               <div>
-                <h1 className="text-sm font-black tracking-wider uppercase bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
+                <h1 className="text-sm font-black tracking-wider uppercase bg-gradient-to-r from-teal-700 to-emerald-600 bg-clip-text text-transparent">
                   UNIPDU IOT
                 </h1>
                 <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
@@ -222,7 +224,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   </Link>
                   <Link
                     href="/"
-                    className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all text-xs font-bold uppercase border border-transparent hover:bg-slate-50 text-indigo-600 font-black mt-4 block border-t border-slate-100 pt-3"
+                    className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all text-xs font-bold uppercase border border-transparent hover:bg-slate-50 text-teal-600 font-black mt-4 block border-t border-slate-100 pt-3"
                   >
                     <span>← Kembali ke Dashboard</span>
                   </Link>
@@ -247,7 +249,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         onClick={() => setIsMobileSidebarOpen(false)}
                         className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all text-left text-xs font-bold uppercase border ${
                           activeBuildingId === b.id
-                            ? 'bg-indigo-50/70 text-indigo-600 border-indigo-100 shadow-xs shadow-indigo-50/50'
+                            ? 'bg-teal-50/70 text-teal-700 border-teal-100 shadow-xs shadow-teal-55/40'
                             : 'hover:bg-slate-50 text-slate-500 border-transparent'
                         }`}
                       >
@@ -308,12 +310,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* Audit Logs Ticker Stream (Hidden on mobile for responsive space) */}
             <div className="hidden sm:flex items-center space-x-3 overflow-hidden max-w-xs md:max-w-sm lg:max-w-xl">
-              <span className="bg-indigo-50 border border-indigo-100 text-indigo-650 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider shrink-0">
+              <span className="bg-teal-50 border border-teal-100 text-teal-700 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider shrink-0">
                 LOGS
               </span>
               <div className="text-[10px] font-mono text-slate-500 truncate whitespace-nowrap">
                 {logs.length > 0 ? (
-                  <span>[{logs[0].timestamp}] <strong className="text-indigo-650">{logs[0].userName}</strong> {logs[0].action}</span>
+                  <span>[{logs[0].timestamp}] <strong className="text-teal-700">{logs[0].userName}</strong> {logs[0].action}</span>
                 ) : (
                   <span className="text-slate-400 uppercase font-bold tracking-widest">Sinkronisasi log...</span>
                 )}
@@ -335,7 +337,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {isAdminPage && (
               <Link 
                 href="/"
-                className="px-2.5 py-1.5 md:px-3.5 md:py-1.5 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100/50 text-indigo-600 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all flex items-center space-x-1.5 shadow-xs"
+                className="px-2.5 py-1.5 md:px-3.5 md:py-1.5 bg-teal-50 border border-teal-100 hover:bg-teal-100/50 text-teal-700 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all flex items-center space-x-1.5 shadow-xs"
               >
                 <span>← Dashboard</span>
               </Link>

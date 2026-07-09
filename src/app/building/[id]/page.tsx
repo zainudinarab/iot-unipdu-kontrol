@@ -432,9 +432,9 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
   return (
     <DashboardLayout>
       {loading ? (
-        <div className="py-16 flex flex-col items-center justify-center space-y-2">
-          <span className="loading loading-spinner text-indigo-655 loading-md"></span>
-          <span className="text-[10px] text-slate-400 font-bold uppercase">Memuat denah lokasi gedung...</span>
+        <div className="bg-white border border-slate-200 rounded-2xl p-8 flex flex-col items-center justify-center space-y-3 shadow-xs">
+          <span className="loading loading-spinner text-teal-600 loading-md"></span>
+          <p className="text-slate-450 text-[10px] uppercase font-bold tracking-widest text-center">Menghubungkan Perangkat...</p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -448,11 +448,11 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400 font-semibold uppercase tracking-wider">
                 <span>Status sensor ruangan dan kendali switch terintegrasi</span>
                 {buildingCoordinates && (
-                  <a
+                  <a 
                     href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(buildingCoordinates)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-indigo-650 hover:underline flex items-center space-x-1 border-l border-slate-200 pl-3 lowercase text-[11px]"
+                    className="text-teal-600 hover:underline flex items-center space-x-1 border-l border-slate-200 pl-3 lowercase text-[11px]"
                   >
                     <span>📍 GPS: {buildingCoordinates}</span>
                   </a>
@@ -487,10 +487,10 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
                       <button
                         key={floorId}
                         onClick={() => setActiveFloorId(floorId)}
-                        className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center space-x-2 ${
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all select-none ${
                           isActive
-                            ? 'bg-white text-indigo-600 shadow-sm border border-slate-200'
-                            : 'hover:bg-slate-200/50 text-slate-500 border border-transparent'
+                            ? 'bg-white text-teal-700 shadow-sm border border-slate-200'
+                            : 'text-slate-450 hover:text-slate-700'
                         }`}
                       >
                         <span>{floorId}</span>
@@ -505,9 +505,9 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
               )}
 
               {devicesLoading && devices.length === 0 ? (
-                <div className="py-16 flex flex-col items-center justify-center space-y-2">
-                  <span className="loading loading-spinner text-indigo-650 loading-md"></span>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Membaca sensor perangkat Bardi...</span>
+                <div className="bg-white border border-slate-200 rounded-2xl p-12 flex flex-col items-center justify-center space-y-3 shadow-xs">
+                  <span className="loading loading-spinner text-teal-600 loading-md"></span>
+                  <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Memuat daftar perangkat...</p>
                 </div>
               ) : (
                 /* Rooms Grid for Active Floor only */
@@ -565,7 +565,7 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
                                     <div key={deviceItem.id} className="p-4 bg-slate-55 border border-slate-100 rounded-xl space-y-3">
                                       <div className="flex justify-between text-[9px] text-slate-455 font-black uppercase tracking-wider">
                                         <span>{deviceItem.name}</span>
-                                        <span className="text-cyan-600 font-bold">
+                                        <span className="text-emerald-600 font-bold">
                                           {deviceItem.isSequential ? 'Sequential Switch' : `${count}-Gang Switch`}
                                         </span>
                                       </div>
@@ -604,8 +604,8 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
                                       
                                       {/* Sequential Live Status Ticker */}
                                       {seqStatusMsg[deviceItem.id] && (
-                                        <div className="bg-indigo-50/60 border border-indigo-100/50 rounded-lg p-2 text-center animate-pulse">
-                                          <span className="text-[8px] font-black uppercase tracking-wider text-indigo-600 block">
+                                        <div className="bg-teal-50/60 border border-teal-100/50 rounded-lg p-2 text-center animate-pulse">
+                                          <span className="text-[8px] font-black uppercase tracking-wider text-teal-700 block">
                                             {seqStatusMsg[deviceItem.id]}
                                           </span>
                                         </div>
@@ -633,7 +633,7 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
                                               disabled={actionLoading[actionKey] || !!actionLoading[`${deviceItem.id}-seq`]}
                                               className={`py-2.5 px-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 flex flex-col items-center gap-1 border ${
                                                 isActivelySeqProcessed
-                                                  ? 'bg-indigo-50 border-indigo-400 ring-2 ring-indigo-400/40 animate-pulse scale-[1.03] text-indigo-650'
+                                                  ? 'bg-teal-50 border-teal-400 ring-2 ring-teal-400/40 animate-pulse scale-[1.03] text-teal-700'
                                                   : isStateOn
                                                     ? 'bg-amber-50 text-amber-600 border-amber-200 shadow-sm'
                                                     : 'bg-white hover:bg-slate-50 text-slate-400 border-slate-200'
@@ -641,7 +641,7 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
                                             >
                                               <span className={`text-base transition-all duration-300 ${
                                                 isActivelySeqProcessed
-                                                  ? 'animate-bounce text-indigo-500'
+                                                  ? 'animate-bounce text-teal-600'
                                                   : isStateOn
                                                     ? 'text-amber-500 drop-shadow-[0_2px_8px_rgba(245,158,11,0.4)] scale-110'
                                                     : 'text-slate-300 grayscale opacity-60'
@@ -668,7 +668,7 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
                                     <div key={deviceItem.id} className="p-4 bg-slate-55 border border-slate-100 rounded-xl space-y-3">
                                       <div className="flex justify-between text-[9px] text-slate-455 font-black uppercase tracking-wider">
                                         <span>{deviceItem.name}</span>
-                                        <span className="text-indigo-600 font-bold">Universal IR Remote</span>
+                                        <span className="text-emerald-600 font-bold">Universal IR Remote</span>
                                       </div>
                                       
                                       <div className="space-y-2">
@@ -685,7 +685,7 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
                                             <div key={`ac-${unitNum}`} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
                                               <div className="space-y-0.5">
                                                 <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{label}</div>
-                                                <div className="text-[10px] font-mono font-bold text-indigo-600">
+                                                <div className="text-[10px] font-mono font-bold text-teal-650">
                                                   {isActive ? `SUHU: ${currentTemp}°C` : 'MATI (STANDBY)'}
                                                 </div>
                                               </div>
