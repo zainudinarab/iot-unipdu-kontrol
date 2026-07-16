@@ -7,6 +7,7 @@ import {
   getDoc, 
   getDocs, 
   addDoc, 
+  updateDoc,
   query, 
   where 
 } from 'firebase/firestore';
@@ -159,7 +160,7 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
           }
         }
 
-        deviceList.push({
+        const deviceDataObj: any = {
           id: dDoc.id,
           name: dData.name,
           tuyaDeviceId: dData.tuyaDeviceId,
@@ -174,13 +175,14 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
           state2: liveStatus.state2,
           state3: liveStatus.state3,
           state4: liveStatus.state4 || false,
-          state: liveStatus.state,
-          temp: liveStatus.temp,
+          state: dData.state !== undefined ? dData.state : liveStatus.state,
+          temp: dData.temp !== undefined ? dData.temp : (liveStatus.temp || 24),
+          mode: dData.mode !== undefined ? dData.mode : (liveStatus.mode || 'cold'),
+          fan: dData.fan !== undefined ? dData.fan : (liveStatus.fan || 'auto'),
           volume: liveStatus.volume,
-          mode: liveStatus.mode,
-          tvState: false,
-          tvVolume: 15,
-          projectorState: false,
+          tvState: dData.tvState !== undefined ? dData.tvState : false,
+          tvVolume: dData.tvVolume !== undefined ? dData.tvVolume : 15,
+          projectorState: dData.projectorState !== undefined ? dData.projectorState : false,
           online: liveStatus.online,
           isMock: liveStatus.isMock,
           irDevices: dData.irDevices || ['ac'],
@@ -191,7 +193,25 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
           sequentialDelay: dData.sequentialDelay || 2,
           onOrder: dData.onOrder || 'forward',
           offOrder: dData.offOrder || 'forward',
-        });
+        };
+
+        if (dData.type === 'ir_remote') {
+          for (let i = 2; i <= (dData.acCount || 1); i++) {
+            deviceDataObj[`ac${i}State`] = dData[`ac${i}State`] !== undefined ? dData[`ac${i}State`] : false;
+            deviceDataObj[`ac${i}Temp`] = dData[`ac${i}Temp`] !== undefined ? dData[`ac${i}Temp`] : 24;
+            deviceDataObj[`ac${i}Mode`] = dData[`ac${i}Mode`] !== undefined ? dData[`ac${i}Mode`] : 'cold';
+            deviceDataObj[`ac${i}Fan`] = dData[`ac${i}Fan`] !== undefined ? dData[`ac${i}Fan`] : 'auto';
+          }
+          for (let i = 2; i <= (dData.tvCount || 1); i++) {
+            deviceDataObj[`tv${i}State`] = dData[`tv${i}State`] !== undefined ? dData[`tv${i}State`] : false;
+            deviceDataObj[`tv${i}Volume`] = dData[`tv${i}Volume`] !== undefined ? dData[`tv${i}Volume`] : 15;
+          }
+          for (let i = 2; i <= (dData.projectorCount || 1); i++) {
+            deviceDataObj[`proj${i}State`] = dData[`proj${i}State`] !== undefined ? dData[`proj${i}State`] : false;
+          }
+        }
+
+        deviceList.push(deviceDataObj);
       }
       setDevices(deviceList);
     } catch (err) {
@@ -387,18 +407,113 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
       const activeRoom = rooms.find(r => r.id === deviceItem.roomId);
       await addAuditLog(`MENGIRIM PERINTAH IR REMOTE (${command}) ke ${deviceItem.name} di ${activeRoom?.name || 'Ruangan'}`);
       
-      setDevices(prev => prev.map(d => {
-        if (d.id === deviceItem.id) {
-          if (command === 'POWER') return { ...d, state: !d.state };
-          if (command === 'TEMP_UP') return { ...d, temp: Math.min((d.temp || 24) + 1, 30) };
-          if (command === 'TEMP_DOWN') return { ...d, temp: Math.max((d.temp || 24) - 1, 16) };
+      let commandsToSend: Array<{ code: string; value: any }> = [];
+      let updateData: any = {};
+      const match = command.match(/(AC|TV|PROJ)(\d+)?_(.+)/);
+      if (match) {
+        const prefix = match[1];
+        const unitNum = match[2] ? parseInt(match[2], 10) : 1;
+        const action = match[3];
+
+        if (prefix === 'AC') {
+          const stateKey = unitNum === 1 ? 'state' : `ac${unitNum}State`;
+          const tempKey = unitNum === 1 ? 'temp' : `ac${unitNum}Temp`;
+          
+          if (action === 'POWER') {
+            const nextPower = !deviceItem[stateKey];
+            commandsToSend = [{ 
+              code: nextPower ? 'PowerOn' : 'PowerOff', 
+              value: nextPower ? 'PowerOn' : 'PowerOff' 
+            }];
+            updateData[stateKey] = nextPower;
+          } else if (action === 'TEMP_UP') {
+            const nextTemp = Math.min((deviceItem[tempKey] || 24) + 1, 30);
+            commandsToSend = [{ code: 'T', value: nextTemp }];
+            updateData[tempKey] = nextTemp;
+          } else if (action === 'TEMP_DOWN') {
+            const nextTemp = Math.max((deviceItem[tempKey] || 24) - 1, 16);
+            commandsToSend = [{ code: 'T', value: nextTemp }];
+            updateData[tempKey] = nextTemp;
+          } else if (action.startsWith('MODE_')) {
+            const modeVal = action.replace('MODE_', '').toLowerCase();
+            const modeMap: Record<string, number> = {
+              cold: 0,
+              heat: 1,
+              auto: 2,
+              wind_dry: 4,
+              dehumidification: 4
+            };
+            const modeIndex = modeMap[modeVal] !== undefined ? modeMap[modeVal] : 0;
+            commandsToSend = [{ code: 'M', value: modeIndex }];
+            const modeKey = unitNum === 1 ? 'mode' : `ac${unitNum}Mode`;
+            updateData[modeKey] = modeVal;
+          } else if (action.startsWith('FAN_')) {
+            const fanVal = action.replace('FAN_', '').toLowerCase();
+            const fanMap: Record<string, number> = {
+              auto: 0,
+              low: 1,
+              mid: 2,
+              high: 3
+            };
+            const fanIndex = fanMap[fanVal] !== undefined ? fanMap[fanVal] : 0;
+            commandsToSend = [{ code: 'F', value: fanIndex }];
+            const fanKey = unitNum === 1 ? 'fan' : `ac${unitNum}Fan`;
+            updateData[fanKey] = fanVal;
+          }
+        } else if (prefix === 'TV') {
+          const stateKey = unitNum === 1 ? 'tvState' : `tv${unitNum}State`;
+          if (action === 'POWER') {
+            const nextPower = !deviceItem[stateKey];
+            commandsToSend = [{ code: 'switch', value: nextPower }];
+            updateData[stateKey] = nextPower;
+          } else if (action === 'VOL_UP') {
+            commandsToSend = [{ code: 'volume_control', value: 1 }];
+          } else if (action === 'VOL_DOWN') {
+            commandsToSend = [{ code: 'volume_control', value: -1 }];
+          }
         }
-        return d;
-      }));
+      }
+
+      if (commandsToSend.length > 0) {
+        const res = await fetch('/api/tuya', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            deviceId: deviceItem.tuyaDeviceId,
+            deviceItemId: deviceItem.id,
+            commands: commandsToSend,
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          const errorMsg = errData.error || 'Gagal mengirim perintah remote';
+          throw new Error(errorMsg);
+        }
+
+        // Update local UI state
+        if (Object.keys(updateData).length > 0) {
+          setDevices(prev => prev.map(d => d.id === deviceItem.id ? { ...d, ...updateData } : d));
+        }
+
+        // Persist the state in Firestore from client-side
+        if (Object.keys(updateData).length > 0) {
+          try {
+            await updateDoc(doc(db, 'devices', deviceItem.id), updateData);
+            console.log('Firebase Firestore updated successfully:', updateData);
+          } catch (dbErr) {
+            console.error('Gagal memperbarui Firestore dari client:', dbErr);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error('Gagal mengirim perintah remote:', err);
+      alert(`Gagal: ${err.message || 'Perangkat/tombol tidak didukung oleh remote AC Anda'}`);
     } finally {
       setActionLoading(prev => ({ ...prev, [actionKey]: false }));
     }
   };
+
 
   const getRoomActiveStatus = (roomId: string): boolean => {
     const roomDevices = devices.filter(d => d.roomId === roomId);
@@ -682,40 +797,101 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
                                           const label = acCount > 1 ? `AC ${unitNum}` : 'AC / Pendingin';
 
                                           return (
-                                            <div key={`ac-${unitNum}`} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
-                                              <div className="space-y-0.5">
-                                                <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{label}</div>
-                                                <div className="text-[10px] font-mono font-bold text-teal-650">
-                                                  {isActive ? `SUHU: ${currentTemp}°C` : 'MATI (STANDBY)'}
+                                            <div key={`ac-${unitNum}`} className="py-2 border-b border-slate-100 last:border-0 space-y-2">
+                                              <div className="flex items-center justify-between">
+                                                <div className="space-y-0.5">
+                                                  <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{label}</div>
+                                                  <div className="text-[10px] font-mono font-bold text-teal-650">
+                                                    {isActive ? `SUHU: ${currentTemp}°C` : 'MATI (STANDBY)'}
+                                                  </div>
+                                                </div>
+                                                <div className="flex items-center space-x-1.5">
+                                                  <button
+                                                    onClick={() => {
+                                                      handleIRRemoteCommand(deviceItem, `AC${unitNum}_TEMP_DOWN`);
+                                                    }}
+                                                    disabled={!isActive}
+                                                    className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-500 disabled:opacity-35 flex items-center justify-center font-bold text-xs active:scale-95"
+                                                  >-</button>
+                                                  <button
+                                                    onClick={() => {
+                                                      handleIRRemoteCommand(deviceItem, `AC${unitNum}_TEMP_UP`);
+                                                    }}
+                                                    disabled={!isActive}
+                                                    className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-500 disabled:opacity-35 flex items-center justify-center font-bold text-xs active:scale-95"
+                                                  >+</button>
+                                                  <button
+                                                    onClick={() => {
+                                                      handleIRRemoteCommand(deviceItem, `AC${unitNum}_POWER`);
+                                                    }}
+                                                    className={`h-7 px-3 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all active:scale-95 ${
+                                                      isActive ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                                                    }`}
+                                                  >{acCount > 1 ? `AC ${unitNum}` : 'AC'}</button>
                                                 </div>
                                               </div>
-                                              <div className="flex items-center space-x-1.5">
-                                                <button
-                                                  onClick={() => {
-                                                    setDevices(prev => prev.map(d => d.id === deviceItem.id ? { ...d, [tempKey]: Math.max((d[tempKey] || 24) - 1, 16) } : d));
-                                                    handleIRRemoteCommand(deviceItem, `AC${unitNum}_TEMP_DOWN`);
-                                                  }}
-                                                  disabled={!isActive}
-                                                  className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-500 disabled:opacity-35 flex items-center justify-center font-bold text-xs active:scale-95"
-                                                >-</button>
-                                                <button
-                                                  onClick={() => {
-                                                    setDevices(prev => prev.map(d => d.id === deviceItem.id ? { ...d, [tempKey]: Math.min((d[tempKey] || 24) + 1, 30) } : d));
-                                                    handleIRRemoteCommand(deviceItem, `AC${unitNum}_TEMP_UP`);
-                                                  }}
-                                                  disabled={!isActive}
-                                                  className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-500 disabled:opacity-35 flex items-center justify-center font-bold text-xs active:scale-95"
-                                                >+</button>
-                                                <button
-                                                  onClick={() => {
-                                                    setDevices(prev => prev.map(d => d.id === deviceItem.id ? { ...d, [stateKey]: !d[stateKey] } : d));
-                                                    handleIRRemoteCommand(deviceItem, `AC${unitNum}_POWER`);
-                                                  }}
-                                                  className={`h-7 px-3 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all active:scale-95 ${
-                                                    isActive ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-                                                  }`}
-                                                >{acCount > 1 ? `AC ${unitNum}` : 'AC'}</button>
-                                              </div>
+
+                                              {/* Mode & Fan Speed Controls (Shown only when AC is active) */}
+                                              {isActive && (
+                                                <div className="pt-2 border-t border-dashed border-slate-100 space-y-2">
+                                                  {/* Mode Selector */}
+                                                  <div className="flex items-center space-x-2">
+                                                    <span className="text-[8px] text-slate-400 font-bold uppercase w-10">Mode:</span>
+                                                    <div className="flex flex-wrap gap-1 flex-1">
+                                                      {['cold', 'auto', 'wind_dry', 'heat', 'dehumidification'].map(m => {
+                                                        const modeKey = unitNum === 1 ? 'mode' : `ac${unitNum}Mode`;
+                                                        const activeMode = deviceItem[modeKey] || 'cold';
+                                                        const isCurrent = activeMode === m;
+                                                        const labelMap: Record<string, string> = {
+                                                          cold: 'Cool',
+                                                          auto: 'Auto',
+                                                          wind_dry: 'Dry',
+                                                          heat: 'Heat',
+                                                          dehumidification: 'Dehum'
+                                                        };
+                                                        return (
+                                                          <button
+                                                            key={m}
+                                                            onClick={() => {
+                                                              handleIRRemoteCommand(deviceItem, `AC${unitNum}_MODE_${m.toUpperCase()}`);
+                                                            }}
+                                                            className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase transition-all ${
+                                                              isCurrent ? 'bg-teal-50 text-teal-600 border border-teal-200' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'
+                                                            }`}
+                                                          >
+                                                            {labelMap[m] || m}
+                                                          </button>
+                                                        );
+                                                      })}
+                                                    </div>
+                                                  </div>
+
+                                                  {/* Fan Speed Selector */}
+                                                  <div className="flex items-center space-x-2">
+                                                    <span className="text-[8px] text-slate-400 font-bold uppercase w-10">Fan:</span>
+                                                    <div className="flex flex-wrap gap-1 flex-1">
+                                                      {['low', 'mid', 'high', 'auto'].map(f => {
+                                                        const fanKey = unitNum === 1 ? 'fan' : `ac${unitNum}Fan`;
+                                                        const activeFan = deviceItem[fanKey] || 'auto';
+                                                        const isCurrent = activeFan === f;
+                                                        return (
+                                                          <button
+                                                            key={f}
+                                                            onClick={() => {
+                                                              handleIRRemoteCommand(deviceItem, `AC${unitNum}_FAN_${f.toUpperCase()}`);
+                                                            }}
+                                                            className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase transition-all ${
+                                                              isCurrent ? 'bg-indigo-50 text-indigo-600 border border-indigo-200' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'
+                                                            }`}
+                                                          >
+                                                            {f}
+                                                          </button>
+                                                        );
+                                                      })}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              )}
                                             </div>
                                           );
                                         })}

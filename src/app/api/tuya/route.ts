@@ -1,17 +1,33 @@
 import { NextResponse } from 'next/server';
 import { TuyaClient } from '@/lib/tuya';
+import fs from 'fs';
+import path from 'path';
 
 const tuya = new TuyaClient();
+const STATE_FILE = path.join(process.cwd(), 'device-states.json');
 
-// In-memory simulated state database mapped by deviceId
-// Format: { [deviceId]: { state1: boolean, state2: boolean, state3: boolean } }
-const mockDevicesState: Record<string, { state1: boolean; state2: boolean; state3: boolean }> = {};
-
-function getOrCreateMockState(deviceId: string) {
-  if (!mockDevicesState[deviceId]) {
-    mockDevicesState[deviceId] = { state1: false, state2: false, state3: false };
+// Read states from local JSON file
+function readStates(): Record<string, any> {
+  try {
+    if (fs.existsSync(STATE_FILE)) {
+      return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+    }
+  } catch (err) {
+    console.error('Failed to read device-states.json:', err);
   }
-  return mockDevicesState[deviceId];
+  return {};
+}
+
+// Write/Merge state to local JSON file
+function writeState(deviceId: string, data: Record<string, any>) {
+  try {
+    const states = readStates();
+    states[deviceId] = { ...(states[deviceId] || {}), ...data };
+    fs.writeFileSync(STATE_FILE, JSON.stringify(states, null, 2), 'utf8');
+    console.log(`[STATE_CACHE] Saved state for ${deviceId}:`, data);
+  } catch (err) {
+    console.error('Failed to write device-states.json:', err);
+  }
 }
 
 export async function GET(request: Request) {
@@ -21,12 +37,11 @@ export async function GET(request: Request) {
 
     const status = await tuya.getDeviceStatus(deviceId);
     
-    // Merge with in-memory simulation states if the target device runs in mock/fallback
-    if (status.isMock) {
-      const mockState = getOrCreateMockState(status.id);
-      status.state1 = mockState.state1;
-      status.state2 = mockState.state2;
-      status.state3 = mockState.state3;
+    // Merge with persisted device states (e.g. for IR devices or simulation)
+    const states = readStates();
+    const savedState = states[deviceId];
+    if (savedState) {
+      Object.assign(status, savedState);
     }
     
     return NextResponse.json({ success: true, result: status });
@@ -40,7 +55,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { deviceId, switchIndex, state } = await request.json();
+    const body = await request.json();
+    const { deviceId, switchIndex, state, commands } = body;
     
     if (!deviceId) {
       return NextResponse.json(
@@ -49,6 +65,58 @@ export async function POST(request: Request) {
       );
     }
 
+    // Check if general commands list is provided (e.g. for IR remote controls)
+    if (Array.isArray(commands)) {
+      const success = await tuya.sendGeneralCommand(deviceId, commands);
+      if (success) {
+        const updateData: any = {};
+        for (const cmd of commands) {
+          if (cmd.code === 'PowerOn') {
+            updateData.state = true;
+          } else if (cmd.code === 'PowerOff') {
+            updateData.state = false;
+          } else if (cmd.code === 'T') {
+            updateData.temp = cmd.value;
+          } else if (cmd.code === 'switch') {
+            updateData.tvState = cmd.value;
+          } else if (cmd.code === 'M') {
+            const modeMap: Record<number, string> = {
+              0: 'cold',
+              1: 'heat',
+              2: 'auto',
+              3: 'auto',
+              4: 'wind_dry'
+            };
+            updateData.mode = modeMap[Number(cmd.value)] || 'cold';
+          } else if (cmd.code === 'F') {
+            const fanMap: Record<number, string> = {
+              0: 'auto',
+              1: 'low',
+              2: 'mid',
+              3: 'high'
+            };
+            updateData.fan = fanMap[Number(cmd.value)] || 'auto';
+          }
+        }
+
+        if (Object.keys(updateData).length > 0) {
+          writeState(deviceId, updateData);
+        }
+
+        const status = await tuya.getDeviceStatus(deviceId);
+        const states = readStates();
+        if (states[deviceId]) {
+          Object.assign(status, states[deviceId]);
+        }
+        return NextResponse.json({ success: true, result: status });
+      }
+      return NextResponse.json(
+        { success: false, error: 'Gagal mengirim perintah kontrol umum ke perangkat Tuya' },
+        { status: 500 }
+      );
+    }
+
+    // Legacy switchIndex / state handling (BARDI switches)
     if (typeof switchIndex !== 'number' || switchIndex < 1 || switchIndex > 3) {
       return NextResponse.json(
         { success: false, error: 'Parameter switchIndex wajib berupa angka 1, 2, atau 3' },
@@ -65,17 +133,13 @@ export async function POST(request: Request) {
 
     const success = await tuya.controlDevice(deviceId, switchIndex, state);
     if (success) {
-      // Sync simulated states
-      const mockState = getOrCreateMockState(deviceId);
-      if (switchIndex === 1) mockState.state1 = state;
-      if (switchIndex === 2) mockState.state2 = state;
-      if (switchIndex === 3) mockState.state3 = state;
+      const key = `state${switchIndex}`;
+      writeState(deviceId, { [key]: state });
 
       const status = await tuya.getDeviceStatus(deviceId);
-      if (status.isMock) {
-        status.state1 = mockState.state1;
-        status.state2 = mockState.state2;
-        status.state3 = mockState.state3;
+      const states = readStates();
+      if (states[deviceId]) {
+        Object.assign(status, states[deviceId]);
       }
       return NextResponse.json({ success: true, result: status });
     }
@@ -85,9 +149,13 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   } catch (error: any) {
+    console.error('[API ERROR]', error);
     return NextResponse.json(
       { success: false, error: error.message || 'Terjadi kesalahan sistem' },
       { status: 500 }
     );
   }
 }
+
+
+

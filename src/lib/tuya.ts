@@ -195,4 +195,85 @@ export class TuyaClient {
       return false;
     }
   }
+
+  // Send general command array to any Tuya device (useful for IR remotes)
+  async sendGeneralCommand(
+    targetDeviceId: string,
+    commands: Array<{ code: string; value: any }>
+  ): Promise<boolean> {
+    const activeDeviceId = targetDeviceId || this.deviceId;
+
+    if (!activeDeviceId || activeDeviceId.startsWith('simulation')) {
+      return true; // Simulate successful control
+    }
+
+    try {
+      const accessToken = await this.getAccessToken();
+      const timestamp = Date.now().toString();
+      const path = `/v1.0/devices/${activeDeviceId}/commands`;
+      const body = { commands };
+      const bodyStr = JSON.stringify(body);
+      const signature = this.getSignature('POST', path, accessToken, timestamp, bodyStr);
+
+      const res = await fetch(`${this.endpoint}${path}`, {
+        method: 'POST',
+        headers: {
+          'client_id': this.clientId,
+          'access_token': accessToken,
+          'sign': signature,
+          't': timestamp,
+          'sign_method': 'HMAC-SHA256',
+          'Content-Type': 'application/json',
+        },
+        body: bodyStr,
+      });
+
+      if (!res.ok) {
+        throw new Error(`Control failed: ${res.statusText}`);
+      }
+
+      const data = await res.json();
+      return !!data.success;
+    } catch (error) {
+      console.error('Tuya general command execution error:', error);
+      return false;
+    }
+  }
+
+
+  // Check if a device is a native smart device (supporting native 'switch' code)
+  async isNativeDevice(targetDeviceId: string): Promise<boolean> {
+    const activeDeviceId = targetDeviceId || this.deviceId;
+    if (!activeDeviceId || activeDeviceId.startsWith('simulation')) {
+      return false;
+    }
+
+    try {
+      const accessToken = await this.getAccessToken();
+      const timestamp = Date.now().toString();
+      const path = `/v1.0/devices/${activeDeviceId}`;
+      const signature = this.getSignature('GET', path, accessToken, timestamp);
+
+      const res = await fetch(`${this.endpoint}${path}`, {
+        method: 'GET',
+        headers: {
+          'client_id': this.clientId,
+          'access_token': accessToken,
+          'sign': signature,
+          't': timestamp,
+          'sign_method': 'HMAC-SHA256',
+        },
+      });
+
+      if (!res.ok) return false;
+      const data = await res.json();
+      if (!data.success) return false;
+
+      const statusList = data.result.status || [];
+      return statusList.some((item: any) => item.code === 'switch');
+    } catch {
+      return false;
+    }
+  }
 }
+
